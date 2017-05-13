@@ -22,6 +22,9 @@ module Parser
     rmacros = {
       '"' => lambda {
         while (p = chars.pop) != '"' do
+          if not p
+            error("end of file when reading string")
+          end
           current = p + current
         end
         tokens.unshift(Box.new(current, :string))
@@ -81,7 +84,7 @@ module Parser
       raise "not matching: found extra " + LEFT
     end
 
-    stack
+    ["do"] + stack
   end
 
 end
