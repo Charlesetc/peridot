@@ -1,16 +1,19 @@
 
+require "./data"
 require "./peridot"
+require 'pry'
 
 LEFT = '['
 RIGHT = ']'
 
-class Parser
 
-  def parse(s)
+module Parser
+
+  def Parser.parse(s)
     trees(tokenize(s))
   end
 
-  def tokenize(s)
+  def Parser.tokenize(s)
     
     tokens = []
     chars = s.chars
@@ -21,7 +24,7 @@ class Parser
         while (p = chars.pop) != '"' do
           current = p + current
         end
-        tokens.unshift(current)
+        tokens.unshift(Box.new(current, :string))
         current = ""
       },
       LEFT => lambda {
@@ -57,7 +60,7 @@ class Parser
     tokens.select { |c| not c.empty? }
   end
 
-  def trees(tokens)
+  def Parser.trees(tokens)
     stack = []
 
     tokens.each do |tok|
@@ -70,7 +73,7 @@ class Parser
         args = stack.last(stack.length - i)
         args.shift ; args.pop # parentheses
         stack = stack.first(i)
-        stack << Tree.new(args)
+        stack << args
       end
     end
 
@@ -79,27 +82,11 @@ class Parser
     end
 
     stack
-
   end
 
 end
 
-class Tree
+trees = Parser.parse(ARGF.read)
 
-  def initialize(children)
-    @children = children
-  end
-
-  def inspect
-    LEFT + @children.map{|s| s.inspect}.join(" ") + RIGHT
-  end
-
-  def to_s
-    LEFT + @children.map{|s| s.to_s}.join(" ") + RIGHT
-  end
-
-end
-
-trees = Parser.new.parse(ARGF.read)
-
-Peridot.run(trees)
+peridot = Peridot.new
+peridot.execute(trees)
