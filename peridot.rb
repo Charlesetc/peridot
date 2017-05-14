@@ -92,11 +92,12 @@ class Peridot
 
       newscope
       function.arguments.each_with_index do |name, i|
-        @locals.last[name, tree[i]]
+        @locals.last[name] = tree[i]
       end
-      execute function.block
+      rv = execute function.block
       dropscope
 
+      return rv
     else
       function.call(tree) or []
     end
@@ -110,7 +111,8 @@ class Peridot
     when [NilClass] then []
     when [Lambda] then tree
     when [Array] then function_apply tree
-    else raise "Undefined! Don't know class #{tree.class} of #{tree}" 
+    else
+      raise "Undefined! Don't know class #{tree.class} of #{tree}" 
     end
   end
 
