@@ -13,7 +13,7 @@ end
 
 class Peridot
 
-  attr_reader :builtins, :macro_builtins
+  attr_reader :builtins, :macro_builtins, :scoped_macro_builtins
 
   def initialize()
     @locals = [{}]
@@ -33,14 +33,27 @@ class Peridot
 
     @builtins = {
       "print" => lambda do |args|
-        puts args
+        puts args.map { |a| a.to_s }.join(" ")
       end,
     }
   end
 
   def define(name, value)
-    @locals.last[name] = value
+    # only call define with a define block.
+    # since it's a define block, it starts a
+    # new scope, but we want the value to live
+    # outside of the define block, so edit
+    # the scope before that one.
+    @locals[-2][name] = value
     value
+  end
+
+  def newscope
+    @locals << {}
+  end
+
+  def dropscope
+    @locals.pop
   end
 
   def retrieve(name)
@@ -65,17 +78,23 @@ class Peridot
 
       if tree.first.class == String then
         if btn = macro_builtins[tree.first]
+          newscope
           tree = btn.call(tree)
-          return execute tree
+          rv = execute tree
+          dropscope
+          return rv
         end
+
 
         # otherwise a builtin function
         btn = builtins[tree.first]
         tree[0] = btn if btn
       end
 
-
+      newscope
       tree.map! { |t| execute(t) }
+      dropscope
+
       function = tree.shift
 
       return [] if function.class == Array
