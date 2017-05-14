@@ -7,13 +7,13 @@ end
 
 def arity(note, tree, expected)
   if expected != tree.length - 1
-    error("expected #{expected} argument(s), got #{found} for #{note}")
+    error("expected #{expected} argument(s), got #{tree.length} for #{note}")
   end
 end
 
 class Peridot
 
-  attr_reader :builtins, :macro_builtins, :scoped_macro_builtins
+  attr_reader :builtins, :macro_builtins
 
   def initialize()
     @locals = [{}]
@@ -21,7 +21,14 @@ class Peridot
     @macro_builtins = {
       "define" => lambda do |tree|
         arity(:define, tree, 2)
-        define tree[1], execute(tree[2])
+        name = tree[1]
+        value = execute tree[2]
+
+        # this needs a -2 because
+        # we want the binding to live
+        # outside of the define part
+        @locals[-2][name] = value
+        value
       end,
       "do" => lambda do |tree|
         tree.shift
@@ -38,16 +45,6 @@ class Peridot
     }
   end
 
-  def define(name, value)
-    # only call define with a define block.
-    # since it's a define block, it starts a
-    # new scope, but we want the value to live
-    # outside of the define block, so edit
-    # the scope before that one.
-    @locals[-2][name] = value
-    value
-  end
-
   def newscope
     @locals << {}
   end
@@ -57,51 +54,64 @@ class Peridot
   end
 
   def retrieve(name)
-    @locals.each do |l|
+    @locals.reverse.each do |l|
       v = l[name]
       return v if v
     end
     return nil
   end
 
+  def function_apply(tree)
+    return tree if tree.empty?
+
+    if tree.first.class == String then
+      if btn = macro_builtins[tree.first]
+        newscope
+        tree = btn.call(tree)
+        rv = execute tree
+        dropscope
+        return rv
+      end
+
+
+      # otherwise a builtin function
+      btn = builtins[tree.first]
+      tree[0] = btn if btn
+    end
+
+    newscope
+    tree.map! { |t| execute(t) }
+    dropscope
+
+    function = tree.shift
+
+    case [function.class]
+    when [Array] then []
+    when [Lambda] then
+      arity("lambda", [function] + tree, function.arguments.length)
+
+      newscope
+      function.arguments.each_with_index do |name, i|
+        @locals.last[name, tree[i]]
+      end
+      execute function.block
+      dropscope
+
+    else
+      function.call(tree) or []
+    end
+  end
 
   def execute(tree)
     case [tree.class]
-    when [String] then
-      retrieve(tree) or error("#{tree} not defined")
+    when [String] then retrieve(tree) or error("#{tree} not defined")
     when [Proc] then tree
     when [Box] then tree
     when [NilClass] then []
-    when [Array] then 
-
-      return tree if tree.empty?
-
-      if tree.first.class == String then
-        if btn = macro_builtins[tree.first]
-          newscope
-          tree = btn.call(tree)
-          rv = execute tree
-          dropscope
-          return rv
-        end
-
-
-        # otherwise a builtin function
-        btn = builtins[tree.first]
-        tree[0] = btn if btn
-      end
-
-      newscope
-      tree.map! { |t| execute(t) }
-      dropscope
-
-      function = tree.shift
-
-      return [] if function.class == Array
-
-      function.call(tree) or []
+    when [Lambda] then tree
+    when [Array] then function_apply tree
+    else raise "Undefined! Don't know class #{tree.class} of #{tree}" 
     end
-
   end
 
 end

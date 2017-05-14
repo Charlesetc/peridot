@@ -9,8 +9,8 @@ RIGHT = ']'
 
 module Parser
 
-  def Parser.parse(s)
-    trees(tokenize(s))
+  def Parser.read(s)
+    lambdas(trees(tokenize(s)))
   end
 
   def Parser.tokenize(s)
@@ -21,43 +21,47 @@ module Parser
 
     rmacros = {
       '"' => lambda {
-        while (p = chars.pop) != '"' do
+        while (p = chars.shift) != '"' do
           if not p
             error("end of file when reading string")
           end
-          current = p + current
+          current += p
         end
-        tokens.unshift(Box.new(current, :string))
+        tokens << Box.new(current, :string)
         current = ""
       },
       LEFT => lambda {
-        tokens.unshift(LEFT)
+        tokens << LEFT
       },
       RIGHT => lambda {
-        tokens.unshift(RIGHT)
+        tokens << RIGHT
       },
       "\n" => lambda {
-        tokens.unshift(current)
+        tokens << current
         current = ""
       },
       " " => lambda {
-        tokens.unshift(current)
+        tokens << current
         current = ""
       },
+      "#" => lambda {
+        while (p = chars.shift) and p != "\n"
+        end
+      }
     }
 
-    while c = chars.pop do
+    while c = chars.shift do
       f = rmacros[c]
       if f
-        tokens.unshift(current)
+        tokens << current
         current = ""
         f.call()
       else
-        current = c + current
+        current += c
       end
     end
     if not current.empty?
-      tokens.unshift(current)
+      tokens << current
     end
 
     tokens.select { |c| not c.empty? }
@@ -87,9 +91,43 @@ module Parser
     ["do"] + stack
   end
 
+  def Parser.lambdas(trees)
+    newtrees = []
+
+    while not trees.empty? do
+      tree = trees.shift
+
+      if tree.class == Array
+        tree = lambdas(tree)
+      end
+
+      if tree == ":"
+
+        arguments = trees.take_while { |x| x.class != Array }
+        trees.shift(arguments.length)
+        block = trees.shift # get that array too
+
+        tree = Lambda.new(arguments, block)
+      end
+
+      newtrees << tree
+    end
+
+    newtrees
+  end
+
 end
 
-trees = Parser.parse(ARGF.read)
+peridot = Peridot.new
+
+# Kind of repl
+# loop do
+#   trees = Parser.read(readline.chomp)
+#   peridot.execute(trees)
+# end
+
+# non-repl version:
+trees = Parser.read(ARGF.read)
 
 peridot = Peridot.new
 peridot.execute(trees)

@@ -1,4 +1,5 @@
 
+Lambda = Struct.new(:arguments, :block)
 Box = Struct.new(:value, :type)
 
 class Box
